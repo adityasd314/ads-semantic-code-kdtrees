@@ -7,7 +7,7 @@ import numpy as np
 from textwrap import indent
 from semantic_code_search.clustering_kd import clustering_kdtrees
 from semantic_code_search.clustering_suffix import *
-from semantic_code_search.ckustering_inverted import *
+from semantic_code_search.clustering_inverted import *
 import time
 
 def _get_clusters(dataset, distance_threshold):

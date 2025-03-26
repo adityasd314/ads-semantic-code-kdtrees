@@ -10,7 +10,7 @@ def clustering_kdtrees(dataset, distance_threshold, k_neighbors=5):
     
     # Construct K-D Tree for efficient nearest neighbor search
     # print(type(normalized_embeddings))
-    kdtree = KDTree(normalized_embeddings)
+    kdtree = KDTree(normalized_embeddings, True)
     
     # Find k-nearest neighbors for each embedding
     # This step uses K-D Tree's efficient search capabilities
