@@ -1,9 +1,11 @@
 import numpy as np
+import pygtrie
+import unicodedata
 from tqdm import tqdm
 
 def get_suffix_tree_clusters(dataset, distance_threshold):
     """
-    Cluster functions using a simplified similarity approach
+    Cluster functions using suffix-like similarity with progress bar
     
     Args:
     - dataset: Dictionary containing embeddings and functions
@@ -18,62 +20,73 @@ def get_suffix_tree_clusters(dataset, distance_threshold):
     # Normalize embeddings
     embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
     
-    # Prepare text features
-    def extract_text_features(text):
-        """Extract simple text features"""
+    # Utility function to normalize text
+    def normalize_text(text):
+        """Normalize text to remove special characters and convert to lowercase"""
         if not text:
-            return set()
-        # Extract words and short sequences
-        words = set(text.split())
-        sequences = set()
-        # Add short sequences (2-3 words)
-        for i in range(len(words)-1):
-            if i+1 < len(words):
-                sequences.add(' '.join(list(words[i:i+2])))
-            if i+2 < len(words):
-                sequences.add(' '.join(list(words[i:i+3])))
-        return words.union(sequences)
+            return ''
+        # Remove accents and convert to lowercase
+        text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
+        return text.lower()
     
     # Cluster similar functions
     clustered_functions = {}
     used_indices = set()
     
-    # Use tqdm for progress tracking
-    for idx in tqdm(range(len(functions)), desc="Clustering Functions"):
+    # Wrap the main processing with tqdm for progress tracking
+    for idx, (func, embedding) in tqdm(
+        enumerate(zip(functions, embeddings)), 
+        total=len(functions), 
+        desc="Clustering Functions", 
+        unit="function"
+    ):
         if idx in used_indices:
             continue
         
-        # Current function details
-        func = functions[idx]
-        embedding = embeddings[idx]
+        # Normalize function text
+        func_text = normalize_text(func.get('text', ''))
+        if not func_text:
+            continue
         
-        # Extract text features
-        func_features = extract_text_features(func.get('text', ''))
+        # Create trie of suffixes
+        suffix_trie = pygtrie.CharTrie()
+        for i in range(len(func_text)):
+            suffix_trie[func_text[i:]] = True
         
-        # Start a new cluster
         cluster = [func]
         used_indices.add(idx)
         
         # Compare with other functions
-        for compare_idx in range(len(functions)):
-            if compare_idx in used_indices or compare_idx == idx:
+        for compare_idx, (compare_func, compare_embedding) in enumerate(
+            zip(functions, embeddings)
+        ):
+            if (compare_idx in used_indices or 
+                compare_idx == idx):
                 continue
             
-            # Get comparison function details
-            compare_func = functions[compare_idx]
-            compare_embedding = embeddings[compare_idx]
+            # Normalize comparison function text
+            compare_text = normalize_text(compare_func.get('text', ''))
+            if not compare_text:
+                continue
             
-            # Compute embedding distance
+            # Compute multiple similarity metrics
             embedding_distance = np.linalg.norm(embedding - compare_embedding)
             
-            # Extract comparison text features
-            compare_features = extract_text_features(compare_func.get('text', ''))
+            # Find longest common substring using trie
+            def longest_common_substring(text1, text2):
+                max_length = 0
+                for i in range(len(text1)):
+                    for j in range(len(text1) - i + 1):
+                        substring = text1[i:i+j]
+                        if substring and substring in text2:
+                            max_length = max(max_length, len(substring))
+                return max_length
             
-            # Compute feature similarity
-            feature_similarity = len(func_features.intersection(compare_features)) / len(func_features.union(compare_features))
+            common_length = longest_common_substring(func_text, compare_text)
+            text_similarity = common_length / max(len(func_text), len(compare_text))
             
             # Combine metrics
-            combined_similarity = (embedding_distance + (1 - feature_similarity)) / 2
+            combined_similarity = (embedding_distance + (1 - text_similarity)) / 2
             
             # Check if functions are similar enough
             if combined_similarity <= distance_threshold:
@@ -88,5 +101,3 @@ def get_suffix_tree_clusters(dataset, distance_threshold):
             }
     
     return list(clustered_functions.values())
-
-# Add to clustering functions dictionary

@@ -1,196 +1,152 @@
-# Semantic Code Search
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/sturdy-dev/semantic-code-search/main/docs/readme-banner.png">
-</p>
-<p align='center'>
-  Search your codebase with natural language. No data leaves your computer.
-</p>
-<p align='center'>
-    <a href="https://github.com/sturdy-dev/semantic-code-search/blob/main/LICENSE.txt">
-        <img alt="GitHub"
-        src="https://img.shields.io/github/license/sturdy-dev/semantic-code-search">
-    </a>
-    <a href="https://pypi.org/project/semantic-code-search">
-     <img alt="PyPi"
- src="https://img.shields.io/pypi/v/semantic-code-search">
-    </a>
-</p>
-<p align="center">
-  <a href="#overview">🔍 Overview</a> •
-  <a href="#installation">🔧 Installation</a> •
-  <a href="#usage">💻 Usage</a> •
-  <a href="#command-line-flags">📖 Docs</a> •
-  <a href="#how-it-works">🧠 How it works</a>
-</p>
-
---------------------------------------------------------------------
+# Semantic Code Search & Clustering Tool
 
 ## Overview
 
-`sem` is a command line application which allows you to search your git repository using natural language. For example you can query for:
+This tool enables **semantic search in codebases** using **machine learning-based embeddings** and efficient **data structures** for fast retrieval and clustering.
 
-- 'Where are API requests authenticated?'
-- 'Saving user objects to the database'
-- 'Handling of webhook events'
-- 'Where are jobs read from the queue?'
+### Features
 
-You will get a (visualized) list of code snippets and their `file:line` locations. You can use `sem` for exploring large codebases or, if you are as forgetfull as I am, even small ones.
-
-Basic usage:
-
-```bash
-sem 'my query'
-```
-
-This will present you with a list of code snippets that most closely match your search. You can select one and press  `Return` to open it in your editor of choice.
-
-How does this work? In a nutshell, it uses a neural network to generate code embeddings. More info [below](#how-it-works).
-
-> NB: All processing is done on your hardware and no data is transmitted to the Internet.
+- **AST-based Function Extraction**: Uses Tree-Sitter to extract functions/methods.
+- **Machine Learning Embeddings**: Uses `sentence-msmarco-bert-base-dot-v5-nlpl-code_search_net`.
+- **Efficient Search Mechanism**: Uses **MinHeap** to retrieve Top-K results.
+- **Fast Nearest Neighbor Search**: Supports **KDTree**, **Suffix Tree**, and **PyTorch TopK**.
+- **Clustering with Similarity Matrix**: Uses **Agglomerative Clustering** to group similar functions.
+- **Query UI**: Provides a clean UI that allows jumping to the matched function in the editor.
 
 ## Installation
 
-You can install `semantic-code-search` via `pip`.
-
-### Pip (MacOS, Linux, Windows)
+### 1. Clone the Repository
 
 ```bash
-pip3 install semantic-code-search
+git clone https://github.com/your-username/semantic-code-search.git
+cd semantic-code-search
+```
+
+### 2. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Install Tree-Sitter (if not already installed)
+
+```bash
+pip install tree-sitter
 ```
 
 ## Usage
 
-TL;DR:
+### Command-Line Interface
+
+The tool provides several functionalities through a command-line interface (CLI). The commands available are:
+
+#### 1. Generate Code Embeddings
 
 ```bash
-cd /my/repo
-sem 'my query'
+python main.py -d --path-to-repo /path/to/repo
 ```
 
-Run `sem --help` to see [all available options](#command-line-flags).
+This command will:
 
-### Searching for code
+- Parse the repository using **Tree-Sitter** to extract function/method nodes.
+- Generate **BERT-based embeddings** for extracted functions.
+- Store the embeddings in the `.embeddings` directory for future searches.
 
-Inside your repo simply run
+#### 2. Search for Similar Code Snippets
 
 ```bash
-sem 'my query'
+python main.py -p /path/to/repo --query "find maximum subarray"
 ```
 
-*(quotes can be omitted)*
+This command will:
 
-> Note that you *need to* be  inside a git repository or provide a path to a repo with the `-p` argument.
+- Compute the **query embedding**.
+- Compare it against **stored embeddings** using **cosine similarity**.
+- Use a **MinHeap** to efficiently fetch **Top-K** matches.
+- Display results in a **clean UI**, allowing direct navigation to the matched function.
 
-Before you get your *first* search results, two things need to happen:
+#### 3. Cluster Similar Code Functions
 
-- The app downloads its [model](#model) (~500 MB). This is done only once for the installation.
-- The app generates 'embeddings' of your code. This will be cached in an `.embeddings` file at the root of the repo and is reused in subsequent searches.
-
-Depending on the project size, the above can take from a couple of seconds to minutes. Once this is complete, querying is very fast.
-
-Example output:
-
-```bash session
-foo@bar:~$ cd /my/repo
-foo@bar:~$ sem 'parsing command line args'
-Embeddings not found in /Users/kiril/src/semantic-code-search. Generating embeddings now.
-Embedding 15 functions in 1 batches. This is done once and cached in .embeddings
-Batches: 100%|█████████████████████████████████████████████████████████| 1/1 [00:07<00:00,  7.05s/it]
+```bash
+python main.py -c --path-to-repo /path/to/repo --cluster-data-structure KDTrees
 ```
 
-### Navigating search results
+This command will:
 
-By default, a list of the top 5 matches are shown, containing :
+- Normalize embeddings before clustering.
+- Use the specified **data structure** for nearest-neighbor search.
+- Construct a **similarity matrix** based on embedding distances.
+- Apply **Agglomerative Clustering** to group similar functions.
 
-- Similarity score
-- File path
-- Line number
-- Code snippet
+## CLI Options
 
-You can navigate the list using the `↑` `↓` arrow keys or `vim` bindings. Pressing `return` will open the relevant file at the line of the code snippet in your editor.
+### **General Arguments**
 
-> NB: The editor used for opening can be set with the `--editor` argument.
+| Option                             | Description                                                                                                 |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `-p, --path-to-repo PATH`        | Path to the Git repository to search or embed.                                                              |
+| `-m, --model-name-or-path MODEL` | Model to use for embedding generation (default:`sentence-msmarco-bert-base-dot-v5-nlpl-code_search_net`). |
+| `-d, --embed`                    | Generate or update embeddings for the codebase.                                                             |
+| `-b, --batch-size BS`            | Batch size for embeddings generation (default: 32).                                                         |
+| `-x, --file-extension EXT`       | Filter results by file extension (e.g., "py" for Python files).                                             |
+| `-n, --n-results N`              | Number of results to return for search (default: 5).                                                        |
+| `-e, --editor {vscode,vim}`      | Editor to open selected search results (default: vscode).                                                   |
 
-Example results:
+### **Clustering Options**
 
-![example results](./docs/example-results.png)
+| Option                                                                        | Description                                                        |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `-c, --cluster`                                                             | Enable clustering mode.                                            |
+| `--cluster-max-distance THRESHOLD`                                          | Maximum distance for clustering (default: 0.2).                    |
+| `--cluster-data-structure {KDTrees,torch.topk,suffix-trees,inverted-index}` | Data structure to use for clustering.                              |
+| `--cluster-min-lines SIZE`                                                  | Ignore clusters with snippets smaller than this size (default: 0). |
+| `--cluster-min-cluster-size SIZE`                                           | Ignore clusters smaller than this size (default: 2).               |
+| `--cluster-ignore-identical`                                                | Ignore identical code/exact duplicates.                            |
 
-### Command line flags
+## How It Works
 
-``` bash
-usage: sem [-h] [-p PATH] [-m MODEL] [-d] [-b BS] [-x EXT] [-n N]
-           [-e {vscode,vim}] [-c] [--cluster-max-distance THRESHOLD]
-           [--cluster-min-lines SIZE] [--cluster-min-cluster-size SIZE]
-           [--cluster-ignore-identincal]
-           ...
+### Step 1: Code Parsing using Abstract Syntax Tree (AST)
 
-Search your codebase using natural language
+- Uses **Tree-Sitter** to parse source code into an **AST (Abstract Syntax Tree)**.
+- Extracts only relevant **function/method** definitions for embedding generation.
 
-positional arguments:
-  query_text
+### Step 2: Embedding Generation
 
-optional arguments:
-  -h, --help            show this help message and exit
-  -p PATH, --path-to-repo PATH
-                        Path to the root of the git repo to search or embed
-  -m MODEL, --model-name-or-path MODEL
-                        Name or path of the model to use
-  -d, --embed           (Re)create the embeddings index for codebase
-  -b BS, --batch-size BS
-                        Batch size for embeddings generation
-  -x EXT, --file-extension EXT
-                        File extension filter (e.g. "py" will only return
-                        results from Python files)
-  -n N, --n-results N   Number of results to return
-  -e {vscode,vim}, --editor {vscode,vim}
-                        Editor to open selected result in
-  -c, --cluster         Generate clusters of code that is semantically
-                        similar. You can use this to spot near duplicates,
-                        results are simply printed to stdout
-  --cluster-max-distance THRESHOLD
-                        How close functions need to be to one another to be
-                        clustered. Distance 0 means that the code is
-                        identical, smaller values (e.g. 0.2, 0.3) are stricter
-                        and result in fewer matches
-  --cluster-min-lines SIZE
-                        Ignore clusters with code snippets smaller than this
-                        size (lines of code). Use this if you are not
-                        interested in smaller duplications (eg. one liners)
-  --cluster-min-cluster-size SIZE
-                        Ignore clusters smaller than this size. Use this if
-                        you want to find code that is similar and repeated
-                        many times (e.g. >5)
-  --cluster-ignore-identincal
-                        Ignore identical code / exact duplicates (where
-                        distance is 0)
-```
+- Utilizes `sentence-msmarco-bert-base-dot-v5-nlpl-code_search_net` to generate **semantic embeddings**.
+- Stores embeddings in `.embeddings` for **fast retrieval**.
 
-## How it works
+### Step 3: Search Functionality
 
-In a nutshell, this application uses a [transformer](https://en.wikipedia.org/wiki/Transformer_(machine_learning_model)) machine learning model to generate embeddings of methods and functions in your codebase. Embeddings are information dense numerical representations of the semantics of the text/code they represent.
+- Query embeddings are **compared with stored embeddings** using **cosine similarity**.
+- A **MinHeap** is used to efficiently retrieve **Top-K** results.
 
-Here is a great blog post by Jay Alammar which explains the concept really nicely:
-> <https://jalammar.github.io/illustrated-word2vec/>
+### Step 4: Clustering Code Snippets
 
-When the app is ran with the `--embed` argument, function and method definitions are first extracted from the source files and then used for sentence embedding. To avoid doing this for every query, the results are compressed and saved in an `.embeddings` file.
+- Supports **three data structures** for **fast nearest-neighbor search**:
+  - **KDTree** – Optimized for fast multi-dimensional lookups.
+  - **Suffix Tree** – Useful for substring-based searches.
+  - **PyTorch TopK** – Optimized for GPU-based retrieval.
+- Constructs a **similarity matrix** for clustering.
+- Applies **Agglomerative Clustering** to **group similar functions**.
 
-When a query is being processed, embeddings are generated from the query text. This is then used in a 'nearest neighbor' search to discover function or methods with similar embeddings. We are basically comparing the [cosine similarity](https://en.wikipedia.org/wiki/Cosine_similarity) between vectors.
+## Data Structures Used
 
-### Model
+| Feature                           | Data Structure Used                                 |
+| --------------------------------- | --------------------------------------------------- |
+| **Search**                  | `MinHeap`                                         |
+| **Nearest Neighbor Search** | `KDTree`, `Suffix Tree`, `PyTorch TopK`       |
+| **Clustering**              | `Similarity Matrix`, `Agglomerative Clustering` |
 
-The application uses [sentence transformer](https://www.sbert.net/) model architecture to produce 'sentence' embeddings for functions and queries. The particular model is [krlvi/sentence-t5-base-nlpl-code_search_net](https://huggingface.co/krlvi/sentence-t5-base-nlpl-code_search_net) which is based of a [SentenceT5-Base](https://github.com/google-research/t5x_retrieval#released-model-checkpoints) checkpoint with 110M parameters and a pooling layer.
+## Query UI
 
-It has been further trained on the [code_search_net](https://huggingface.co/datasets/code_search_net) dataset of 'natural language' — 'programming language' pairs with a [MultipleNegativesRanking](https://github.com/UKPLab/sentence-transformers/blob/master/sentence_transformers/losses/MultipleNegativesRankingLoss.py) loss function.
+- Displays matched functions in a structured interface.
+- Clicking a result allows **jumping directly to the function in the editor**.
 
-You can experiment with your own sentence transformer models with the `--model` parameter.
+## References
 
-## Bugs and limitations
-
-- Currently, the `.embeddings` index is not updated when repository files change. As a temporary workaround, `sem embed` can be re-ran occasionally.
-- Supported languages: `{ 'python', 'javascript', 'typescript', 'ruby', 'go', 'rust', 'java', 'c', 'c++', 'kotlin' }`
-- Supported text editors for opening results in: `{ 'vscode', 'vim' }`
+- [Tree-Sitter Documentation](https://tree-sitter.github.io/tree-sitter/)
+- [BERT-Based Code Search](https://huggingface.co/sentence-msmarco-bert-base-dot-v5-nlpl-code_search_net)
 
 ## License
 
-Semantic Code Search is distributed under [AGPL-3.0-only](LICENSE.txt). For Apache-2.0 exceptions — <kiril@codeball.ai>
+This project is licensed under the **MIT License**.
